@@ -1,45 +1,25 @@
-<!doctype html>
-<html>
+<!DOCTYPE html>
+<html lang="en-us">
   <head>
-    <meta charset="utf-8">
-    <meta http-equiv="X-UA-Compatible" content="chrome=1">
+    <meta charset="UTF-8">
     <title>Easy-to-Understand Computed Tomography  by rehmanali1994</title>
-    <link rel="stylesheet" href="stylesheets/styles.css">
-    <link rel="stylesheet" href="stylesheets/github-dark.css">
-    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.7.1/jquery.min.js"></script>
-    <script src="javascripts/main.js"></script>
-    <!--[if lt IE 9]>
-      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
-    <![endif]-->
-    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
-
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" type="text/css" href="stylesheets/normalize.css" media="screen">
+    <link href='https://fonts.googleapis.com/css?family=Open+Sans:400,700' rel='stylesheet' type='text/css'>
+    <link rel="stylesheet" type="text/css" href="stylesheets/stylesheet.css" media="screen">
+    <link rel="stylesheet" type="text/css" href="stylesheets/github-light.css" media="screen">
   </head>
   <body>
+    <section class="page-header">
+      <h1 class="project-name">Easy-to-Understand Computed Tomography </h1>
+      <h2 class="project-tagline">Simple and Educational Parallel-Beam Computed Tomography Simulator (Implemented Both in MATLAB and CUDA)</h2>
+      <a href="https://github.com/rehmanali1994/easy_computed_tomography.github.io" class="btn">View on GitHub</a>
+      <a href="https://github.com/rehmanali1994/easy_computed_tomography.github.io/zipball/master" class="btn">Download .zip</a>
+      <a href="https://github.com/rehmanali1994/easy_computed_tomography.github.io/tarball/master" class="btn">Download .tar.gz</a>
+    </section>
 
-      <header>
-        <h1>Easy-to-Understand Computed Tomography </h1>
-        <p>Simple and Educational Parallel-Beam Computed Tomography Simulator (Implemented Both in MATLAB and CUDA)</p>
-      </header>
-
-      <div id="banner">
-        <span id="logo"></span>
-
-        <a href="https://github.com/rehmanali1994/easy_computed_tomography.github.io" class="button fork"><strong>View On GitHub</strong></a>
-        <div class="downloads">
-          <span>Downloads:</span>
-          <ul>
-            <li><a href="https://github.com/rehmanali1994/easy_computed_tomography.github.io/zipball/master" class="button">ZIP</a></li>
-            <li><a href="https://github.com/rehmanali1994/easy_computed_tomography.github.io/tarball/master" class="button">TAR</a></li>
-          </ul>
-        </div>
-      </div><!-- end banner -->
-
-    <div class="wrapper">
-      <nav>
-        <ul></ul>
-      </nav>
-      <section>
-        <h1>
+    <section class="main-content">
+      <h1>
 <a id="why-did-i-do-this" class="anchor" href="#why-did-i-do-this" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Why Did I Do This?</h1>
 
 <p>When I first learned how computed tomography worked, it was mostly through mathematics and I never implemented the algorithms to perform the image reconstruction myself. Instead, I used MATLAB built-in functions like radon and iradon to do things for me. The obvious downside to using these built-ins was that I never got to understand and implement the actual algorithms. The few resources I could find had very complicated implementations and did a poor job of helping me to understand how to implement these algorithms from scratch. </p>
@@ -89,13 +69,156 @@
 <p>Here you can see how each ramp-filtered projection gets smeared back into the reconstruction. As the “back-projections” accumulate, we start to see the original object.</p>
 
 <p><img src="https://cloud.githubusercontent.com/assets/10136046/18263016/73646e02-73bb-11e6-96ef-87d45e4cbcf6.gif" alt=""></p>
-      </section>
-      <footer>
-        <p>Project maintained by <a href="https://github.com/rehmanali1994">rehmanali1994</a></p>
-        <p><small>Hosted on GitHub Pages &mdash; Theme by <a href="https://twitter.com/michigangraham">mattgraham</a></small></p>
+
+<h1>
+<a id="implementation" class="anchor" href="#implementation" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Implementation</h1>
+
+<h2>
+<a id="simple-easy-matlab" class="anchor" href="#simple-easy-matlab" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Simple Easy MATLAB</h2>
+
+<p>The <code>CT_ReconExample.m</code> script runs all of the following functions and shows some example reconstructions:</p>
+
+<pre><code>% Make image of original object
+orig_object = flipud(rgb2gray(im2double(imread('../images/cholangioca.jpg'))));
+[Ny, Nx] = size(orig_object);
+
+% Now lets assign coordinates to points in the image
+dx = 0.1; dy = 0.1; % spacing of points in image
+% assume center of image is at (0,0)
+x = (-(Nx-1)/2:(Nx-1)/2)*dx; 
+y = (-(Ny-1)/2:(Ny-1)/2)*dy;
+
+% Show image of original object
+figure; imagesc(x,y,orig_object); axis xy equal tight; colormap gray;
+xlabel('X coordinate'); ylabel('Y coordinate'); title('Original Object');
+
+% Get Sinogram 
+theta = 0.5:0.5:180; % Projection Angles in Degrees
+tic; [r, sg] = sinogram(x, y, orig_object, theta); toc
+
+% Now apply ramp filter to sinogram by using FFT
+sg_rf = rampFilt(sg); toc
+
+% Show sinogram of image and after ramp filtering
+figure; subplot(1,2,1); imagesc(r,theta,sg); title('Simulated Sinogram of Object'); 
+xlabel('Sensor Position'); ylabel('Angle of Projection (degrees)'); colormap gray;
+subplot(1,2,2); imagesc(r,theta,sg_rf); title('Ramp Filtered Sinogram'); 
+xlabel('Sensor Position'); ylabel('Angle of Projection (degrees)'); colormap gray;
+
+% Reconstruct an image of the object
+recon_img = backproj(r, theta, sg, x, y, true); toc
+recon_img_rf = backproj(r, theta, sg_rf, x, y, true); toc
+
+% Show image of the reconstructed object without ramp
+figure; subplot(1,2,1); imagesc(x,y,recon_img); axis xy equal tight;
+xlabel('X coordinate'); ylabel('Y coordinate'); colormap gray;
+title('Reconstructed Object Without Ramp Filter');
+subplot(1,2,2); imagesc(x,y,recon_img_rf); axis xy equal tight;
+xlabel('X coordinate'); ylabel('Y coordinate'); colormap gray;
+title('Reconstructed Object With Ramp Filter');
+</code></pre>
+
+<h3>
+<a id="radon-transform--sinogram-creation" class="anchor" href="#radon-transform--sinogram-creation" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Radon Transform / Sinogram Creation</h3>
+
+<p>The sinogram generating function sets the spacing and total span of detectors on the detector array based on the coordinates of pixels in the image. From this information we use meshgrid to generate <strong>r_sensor</strong> and <strong>r_integration</strong> which correspond to the coordinate along the detector array and the coordinate orthogonal to the detector array, respectively. We re-express <strong>r_sensor</strong> and <strong>r_integration</strong> in polar coordinates as <strong>r_temp</strong> and <strong>theta_r</strong> in order to easily rotate the detector and integration axes. The for loop iterates over rotation angle, uses interpolation to calculate the value of the image at points on the grid defined by the detector and integration axes, and sums along the integration axis;</p>
+
+<pre><code>function [r, sg] = sinogram(x, y, object, theta)
+%SINOGRAM Generate a Sinogram of the Image
+%   [r, sg] = sinogram(x, y, object, theta)
+%   x -- x coordinates of object: numel(x) must be equal to size(object,2)
+%   y -- y coordinates of object: numel(y) must be equal to size(object,1)
+%   object -- intensity of object as a function of x and y
+%   theta -- vector of angles (degrees) to take projections at
+
+% 1/dr = 1/dx + 1/dy: just a way to make sure dr is smaller than dx and dy
+dr = 1/(1/mean(diff(x))+ 1/mean(diff(y))); 
+
+% get the number of elements on the sensor array
+rmax = sqrt(max(abs(x))^2 + max(abs(y))^2);
+rmax = dr*ceil(rmax/dr);
+
+% give coordinate for each element relative to the center of sensor array
+r = -rmax:dr:rmax; 
+[r_sensor, r_integration] = meshgrid(r,r);
+r_temp = sqrt(r_sensor.^2 + r_integration.^2);
+theta_r = atan2(r_integration, r_sensor);
+
+% get X, Y, R, and THETA for all points in object
+[X, Y] = meshgrid(x,y);
+
+% Set aside space for the sinogram
+sg = zeros(numel(theta), numel(r));
+
+% Now Construct the sinogram
+for theta_idx = 1:numel(theta)
+    obj_rotated = interp2(X, Y, object, ...
+        r_temp.*cos(theta_r + deg2rad(theta(theta_idx))), ...
+        r_temp.*sin(theta_r + deg2rad(theta(theta_idx))), 'linear', 0);
+    sg(theta_idx,:) = sum(obj_rotated);
+end
+
+end
+</code></pre>
+
+<h3>
+<a id="ramp-filtering-the-sinogram" class="anchor" href="#ramp-filtering-the-sinogram" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Ramp-Filtering the Sinogram</h3>
+
+<p>Here we simply take an FFT of the sinogram along the detector coordinate. Then we multiply each projection spectrum with the ramp profile. Finally we take an inverse FFT along the detector coordinate to get the ramp-filtered sinogram.</p>
+
+<pre><code>function sg_rampfiltered = rampFilt(sg)
+%RAMPFILT Apply Ramp Filter to Sinogram
+%   sg_rampfiltered = rampFilt(sg)
+%   Each row is a different angle of projection
+%   Each column is a different sensor on the array
+
+[numAngles, numSensors] = size(sg);
+SG = fftshift(fft(sg')',2); % Take FFT of Sensor Data at Each Angle
+ramp = ones(numAngles,1)*abs(-ceil((numSensors-1)/2):floor((numSensors-1)/2));
+SG_rampfiltered = SG .* ramp; % Apply our ramp filter to the FFT
+sg_rampfiltered = ifft(ifftshift(SG_rampfiltered,2)')';
+
+end
+</code></pre>
+
+<h3>
+<a id="backprojecting-the-ramp-filtered-sinogram" class="anchor" href="#backprojecting-the-ramp-filtered-sinogram" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Backprojecting the Ramp-Filtered Sinogram</h3>
+
+<p>Recall the backprojection summation (integral) we derived:
+<img src="https://cloud.githubusercontent.com/assets/10136046/18264599/0f887ada-73c6-11e6-8357-9b583aa3179d.png" alt="">
+The function which performs the backprojection does pretty much the same thing: </p>
+
+<pre><code>function recon_img = backproj(r_sensor, theta, sg, x, y, animation)
+%BACKPROJ Backprojection Reconstruction Based on Sinogram
+%   [x, y, recon_img] = backproj(r_sensor, theta, sg)
+%   r_sensor -- positions of sensors on array
+%   theta -- angles (in degrees) at which projections were taken
+%   sg -- sinogram (sensor as columns; rows as degrees)
+%   x -- x location of pixels in reconstruction (vector)
+%   y -- y location of pixels in reconstruction (vector)
+%   animation -- set this to true to show reconstruction
+%   recon_img -- reconstructed image
+
+% Set up coordinates for reconstructed image
+[X, Y] = meshgrid(x,y);
+recon_img = zeros(size(X));
+
+for theta_idx = 1:numel(theta)
+    recon_img = recon_img + interp1(r_sensor, sg(theta_idx,:), ...
+        X*cosd(theta(theta_idx))+Y*sind(theta(theta_idx)), 'linear', 0);
+end
+
+end
+</code></pre>
+
+      <footer class="site-footer">
+        <span class="site-footer-owner"><a href="https://github.com/rehmanali1994/easy_computed_tomography.github.io">Easy-to-Understand Computed Tomography </a> is maintained by <a href="https://github.com/rehmanali1994">rehmanali1994</a>.</span>
+
+        <span class="site-footer-credits">This page was generated by <a href="https://pages.github.com">GitHub Pages</a> using the <a href="https://github.com/jasonlong/cayman-theme">Cayman theme</a> by <a href="https://twitter.com/jasonlong">Jason Long</a>.</span>
       </footer>
-    </div>
-    <!--[if !IE]><script>fixScale(document);</script><![endif]-->
-    
+
+    </section>
+
+  
   </body>
 </html>
