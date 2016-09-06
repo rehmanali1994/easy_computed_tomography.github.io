@@ -190,6 +190,29 @@ end
 
 end
 </code></pre>
+
+<h2>
+<a id="optimizations-for-cuda" class="anchor" href="#optimizations-for-cuda" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Optimizations for CUDA</h2>
+
+<h3>
+<a id="disclaimer" class="anchor" href="#disclaimer" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Disclaimer</h3>
+
+<p>I am not showing you any of the code needed to get the algorithm working on CUDA here. I would advise you to look at the CUDA code on my repository if you are interested in how to implement all of this in CUDA. Here I am only discussing the key features of CUDA that I used to implement and optimize various stages of the algorithm.</p>
+
+<h3>
+<a id="faster-sinogram-creation" class="anchor" href="#faster-sinogram-creation" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Faster Sinogram Creation</h3>
+
+<p>For sinogram generation, I executed a kernel which ran separate threads for each point in the sinogram (each detector and projection angle). In each parallel thread, a for loop was used to iterate along the integration axis, and texture memory was used to interpolate image values on the grid defined by the detector and integration axes (just like in the MATLAB code). Summation along the integration direction was performed by the for loop executed by each thread. Since each point in the sinogram is calculated in parallel, the sinogram is computed much more quickly by the GPU.</p>
+
+<h3>
+<a id="ramp-filtering-by-cufft" class="anchor" href="#ramp-filtering-by-cufft" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Ramp-Filtering by cuFFT</h3>
+
+<p>CUDA has a cuFFT library, which can perform a set of batched FFTs very quickly. In other words, this batch mode enables us to calculate the FFTs of the projections at each angle in parallel. In addition to the fact that individual FFTs are faster on a GPU, the batched FFT allows us to parallelize the calculation of each individual FFT. This batched FFT was used to perform the FFT step for ramp-filtering. A kernel was used to multiply the projection spectra by the ramp filter. Finally, a batched inverse FFT was performed in order to get the ramp-filtered sinogram. </p>
+
+<h3>
+<a id="parallelized-backprojection" class="anchor" href="#parallelized-backprojection" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Parallelized Backprojection</h3>
+
+<p>Each pixel in the reconstructed image was treated as a separate thread by the backprojection kernel. In each thread, the integration over projection angle was performed by a for loop in pretty much the same way that it was done in MATLAB. The 1D interpolation in MATLAB got replaced by a 1D layered texture where the projection angles served as the layers of the texture. </p>
       </section>
       <footer>
         <p>Project maintained by <a href="https://github.com/rehmanali1994">rehmanali1994</a></p>
