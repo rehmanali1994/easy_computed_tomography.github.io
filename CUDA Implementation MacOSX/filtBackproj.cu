@@ -13,7 +13,7 @@
 #include <cuda_runtime.h>
 #include <cuda_profiler_api.h>
 
-#define pi acosf(-1.0f)
+#define pi 3.141592653589793238462643383279502884197169399375105820974f
 #define MIN(a,b) (((a)<(b))?(a):(b))
 #define MAX(a,b) (((a)>(b))?(a):(b))
 
@@ -29,16 +29,15 @@ __global__ void backprojKernel(int numAngles, float *d_theta,
 	unsigned int x_idx = blockIdx.x * blockDim.x + threadIdx.x;
 	unsigned int y_idx = blockIdx.y * blockDim.y + threadIdx.y;
 	if (x_idx < numx && y_idx < numy) {
-		float x, y, r, r_idx;
+		float x, y, r, r_idx, integral = 0;
 		x = xmin + x_idx * dx;
 		y = ymin + y_idx * dy;
-		d_output[x_idx + numx * y_idx] = 0;
 		for (int theta_idx = 0; theta_idx < numAngles; theta_idx++) {
 			r = x*cosf(d_theta[theta_idx] * pi / 180.0f) + y*sinf(d_theta[theta_idx] * pi / 180.0f);
 			r_idx = (r - rmin) / dr + 0.5f; // +0.5f is texture thing
-			d_output[x_idx + numx * y_idx] += tex1DLayered(texSinogram, r_idx, theta_idx);
+			integral += tex1DLayered(texSinogram, r_idx, theta_idx);
 		}
-		//printf("location=%d layer=%d loc2find=%f  result=%f \n", location_idx, layer, loc2find, d_output[location_idx]);
+		d_output[x_idx + numx * y_idx] = integral;
 	}
 }
 
