@@ -40,7 +40,7 @@
       </nav>
       <section>
         <h1>
-<a id="motivation-and-ultimate-goal" class="anchor" href="#motivation-and-ultimate-goal" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Motivation and Ultimate Goal</h1>
+<a id="why-did-i-do-this" class="anchor" href="#why-did-i-do-this" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Why Did I Do This?</h1>
 
 <p>When I first learned how computed tomography worked, it was mostly through mathematics and I never implemented the algorithms to perform the image reconstruction myself. Instead, I used MATLAB built-in functions like radon and iradon to do things for me. The obvious downside to using these built-ins was that I never got to understand and implement the actual algorithms. The few resources I could find had very complicated implementations and did a poor job of helping me to understand how to implement these algorithms from scratch. </p>
 
@@ -66,7 +66,7 @@
 
 <p><img src="https://cloud.githubusercontent.com/assets/10136046/18261139/5d274a68-73a9-11e6-9a66-14fdcb298354.png" alt=""></p>
 
-<p>Note that the result provides an exact algorithm on how to exactly recover the object function f(x,y). We first have to ramp filter the sinogram. This basically means multiplying the Fourier transform of each projection profile by the absolute value of frequency and then taking the inverse Fourier transform. We then backproject this ramp-filtered sinogram back into the image we are trying to reconstruct. The best way to visualize this is to pretend that the reconstructed image starts off as a white canvas. Then, we take the ramp-filtered profile and smear it into the canvas at the angle the profile was initially projected at. <strong>Example Demonstration</strong> illustrates these steps.</p>
+<p>Note that the result provides an exact algorithm on how to exactly recover the object function f(x,y). We first have to ramp filter the sinogram. This basically means multiplying the Fourier transform of each projection profile by the absolute value of frequency and then taking the inverse Fourier transform. We then backproject this ramp-filtered sinogram back into the image we are trying to reconstruct. The best way to visualize this is to pretend that the reconstructed image starts off as a blank canvas. Then, we take the ramp-filtered profile and smear it into the canvas at the angle the profile was initially projected at. <strong>Example Demonstration</strong> illustrates these steps.</p>
 
 <h2>
 <a id="example-demonstration" class="anchor" href="#example-demonstration" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Example Demonstration</h2>
@@ -74,13 +74,21 @@
 <h3>
 <a id="original-object-image" class="anchor" href="#original-object-image" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Original Object Image</h3>
 
+<p>Here is the object I am trying to take projections of and reconstruct:
+<img src="https://cloud.githubusercontent.com/assets/10136046/18263005/64185db4-73bb-11e6-88ac-d5acdaa310c1.png" alt=""></p>
+
 <h3>
-<a id="ramp-filtered-sinogram" class="anchor" href="#ramp-filtered-sinogram" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Ramp-Filtered Sinogram</h3>
+<a id="sinogram-and-ramp-filtering" class="anchor" href="#sinogram-and-ramp-filtering" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Sinogram and Ramp Filtering</h3>
+
+<p>The image on the left shows the sinogram produced when simply projecting the image onto a line at various angles. The image on the right shows a ramp-filtered version of the same sinogram. Here ramp-filtering was applied to each row of the sinogram (each projection at a particular angle).
+<img src="https://cloud.githubusercontent.com/assets/10136046/18263009/67fa0c16-73bb-11e6-915e-83f1830e990c.png" alt=""></p>
 
 <h3>
 <a id="backprojection-animation" class="anchor" href="#backprojection-animation" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Backprojection Animation</h3>
 
-<p><img src="http://www.reactiongifs.us/wp-content/uploads/2013/10/nuh_uh_conan_obrien.gif" alt=""></p>
+<p>Here you can see how each ramp-filtered projection gets smeared back into the reconstruction. As the “back-projections” accumulate, we start to see the original object.</p>
+
+<p><img src="https://cloud.githubusercontent.com/assets/10136046/18263016/73646e02-73bb-11e6-96ef-87d45e4cbcf6.gif" alt=""></p>
       </section>
       <footer>
         <p>Project maintained by <a href="https://github.com/rehmanali1994">rehmanali1994</a></p>
