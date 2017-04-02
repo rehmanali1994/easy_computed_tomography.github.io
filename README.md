@@ -68,10 +68,10 @@ sg = zeros(numel(theta), numel(r));
 
 % Now Construct the sinogram
 for theta_idx = 1:numel(theta)
-    obj_rotated = interp2(X, Y, object, ...
-        r_temp.*cos(theta_r + deg2rad(theta(theta_idx))), ...
-        r_temp.*sin(theta_r + deg2rad(theta(theta_idx))), 'linear', 0);
-    sg(theta_idx,:) = sum(obj_rotated);
+obj_rotated = interp2(X, Y, object, ...
+r_temp.*cos(theta_r + deg2rad(theta(theta_idx))), ...
+r_temp.*sin(theta_r + deg2rad(theta(theta_idx))), 'linear', 0);
+sg(theta_idx,:) = sum(obj_rotated);
 end
 
 end
@@ -117,8 +117,8 @@ function recon_img = backproj(r_sensor, theta, sg, x, y, animation)
 recon_img = zeros(size(X));
 
 for theta_idx = 1:numel(theta)
-    recon_img = recon_img + interp1(r_sensor, sg(theta_idx,:), ...
-        X*cosd(theta(theta_idx))+Y*sind(theta(theta_idx)), 'linear', 0);
+recon_img = recon_img + interp1(r_sensor, sg(theta_idx,:), ...
+X*cosd(theta(theta_idx))+Y*sind(theta(theta_idx)), 'linear', 0);
 end
 
 end
