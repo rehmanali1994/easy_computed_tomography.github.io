@@ -30,7 +30,7 @@ for theta_idx = 1:numel(theta)
     obj_rotated = interp2(X, Y, object, ...
         r_temp.*cos(theta_r + deg2rad(theta(theta_idx))), ...
         r_temp.*sin(theta_r + deg2rad(theta(theta_idx))), 'linear', 0);
-    sg(theta_idx,:) = sum(obj_rotated);
+    sg(theta_idx,:) = sum(obj_rotated*dr);
 end
 
 end

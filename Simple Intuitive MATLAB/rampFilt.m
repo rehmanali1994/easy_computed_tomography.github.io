@@ -6,7 +6,8 @@ function sg_rampfiltered = rampFilt(sg)
 
 [numAngles, numSensors] = size(sg);
 SG = fftshift(fft(sg')',2); % Take FFT of Sensor Data at Each Angle
-ramp = ones(numAngles,1)*abs(-ceil((numSensors-1)/2):floor((numSensors-1)/2));
+ramp = (1/numSensors) * ones(numAngles,1) * ...
+    abs(-ceil((numSensors-1)/2):floor((numSensors-1)/2));
 SG_rampfiltered = SG .* ramp; % Apply our ramp filter to the FFT
 sg_rampfiltered = ifft(ifftshift(SG_rampfiltered,2)')';
 

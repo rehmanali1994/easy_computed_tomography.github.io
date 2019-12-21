@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy import misc
-import os
+import os, pdb
 
 # Load Image and Give Pixels (x,y) Coordinates
 orig_object = misc.imread('../images/cholangioca.jpg', flatten = True);
@@ -23,6 +23,8 @@ theta = np.linspace(0,180,numAngles,endpoint=False);
 # Save Important Values to .txt files before running CUDA
 np.savetxt('img.txt', orig_object.flatten());
 np.savetxt('theta.txt', theta);
+
+pdb.set_trace();
 
 # Compile then run the CUDA program that creates the sinogram
 os.system('nvcc sinogram.cu -o sinogram.out');

@@ -7,15 +7,20 @@
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
+#include <mex.h>
 
 // Includes CUDA
 #include <cufft.h>
 #include <cuda_runtime.h>
 #include <cuda_profiler_api.h>
+#include <helper_cuda.h>
 
 #define pi 3.141592653589793238462643383279502884197169399375105820974f
+#define CCE checkCudaErrors
+#define HtoD cudaMemcpyHostToDevice
+#define DtoH cudaMemcpyDeviceToHost
 #define MIN(a,b) (((a)<(b))?(a):(b))
-#define MAX(a,b) (((a)>(b))?(a):(b))
+//#define MAX(a,b) (((a)>(b))?(a):(b))
 
 // 1D float textures
 texture<float, cudaTextureType1DLayered, cudaReadModeElementType> texSinogram;
@@ -29,15 +34,26 @@ __global__ void backprojKernel(int numAngles, float *d_theta,
 	unsigned int x_idx = blockIdx.x * blockDim.x + threadIdx.x;
 	unsigned int y_idx = blockIdx.y * blockDim.y + threadIdx.y;
 	if (x_idx < numx && y_idx < numy) {
-		float x, y, r, r_idx, integral = 0;
+		float x, y, r, r_idx, dt, integral = 0;
 		x = xmin + x_idx * dx;
 		y = ymin + y_idx * dy;
 		for (int theta_idx = 0; theta_idx < numAngles; theta_idx++) {
+			// Decide angular weight to assign to this backprojection
+			if (theta_idx == 0) {
+				dt = (pi / 180.0f)*(d_theta[1] - d_theta[0]);
+			}
+			else if (theta_idx == numAngles-1) {
+				dt = (pi / 180.0f)*(d_theta[numAngles-1] - d_theta[numAngles-2]);
+			}
+			else {
+				dt = (pi / 180.0f)*(d_theta[theta_idx+1] - d_theta[theta_idx-1])/2;
+			}
+			// Perform Backprojection by integration over angle
 			r = x*cosf(d_theta[theta_idx] * pi / 180.0f) + y*sinf(d_theta[theta_idx] * pi / 180.0f);
 			r_idx = (r - rmin) / dr + 0.5f; // +0.5f is texture thing
 			integral += tex1DLayered(texSinogram, r_idx, theta_idx);
 		}
-		d_output[x_idx + numx * y_idx] = integral;
+		d_output[x_idx + numx * y_idx] = dt*integral/dr;
 	}
 }
 
@@ -49,8 +65,8 @@ __global__ void rampFiltKernel(cufftComplex* sgFFT, int numSensors, int numAngle
 	unsigned int jj = blockIdx.y * blockDim.y + threadIdx.y;
 
 	if (ii < numSensors && jj < numAngles) {
-		sgFFT[ii + numSensors*jj].x *= MIN(ii, numSensors - ii) / (float)numSensors;
-		sgFFT[ii + numSensors*jj].y *= MIN(ii, numSensors - ii) / (float)numSensors;
+		sgFFT[ii + numSensors*jj].x *= ( MIN(ii, numSensors - ii) / ( (float) numSensors ) ) / ( (float) numSensors );
+		sgFFT[ii + numSensors*jj].y *= ( MIN(ii, numSensors - ii) / ( (float) numSensors ) ) / ( (float) numSensors );
 	}
 }
 
@@ -63,23 +79,30 @@ __global__ void getRealPart(float* dst, cufftComplex* src, int numVals)
 }
 
 // Host code
-int main(int argc, char *argv[])
+void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 {
-	// Get all integer values from inputs
-	int numAngles = strtol(argv[1], NULL, 10);
-	float minR = atof(argv[3]);
-	float maxR = atof(argv[4]);
-	int numSensors = strtol(argv[5], NULL, 10);
-	float minX = atof(argv[7]);
-	float maxX = atof(argv[8]);
-	int numX = strtol(argv[9], NULL, 10);
-	float minY = atof(argv[10]);
-	float maxY = atof(argv[11]);
-	int numY = strtol(argv[12], NULL, 10);
+	// Argument check
+	if (nrhs != 5)	{ mexErrMsgTxt("Wrong number of inputs.\n"); }
+  if (nlhs != 1)	{ mexErrMsgTxt("Wrong number of outputs.\n"); }
 
-	// Calculate some other values based on those inputs
+	// Gather values from inputs
+	double *r = (double *)mxGetData(prhs[0]);
+	int numSensors = (int) mxGetNumberOfElements(prhs[0]);
+	float minR = (float) r[0];
+	float maxR = (float) r[numSensors-1];
 	float dr = (maxR - minR) / ((float)(numSensors - 1));
+	double *theta_degrees = (double *)mxGetData(prhs[1]);
+	int numAngles = (int) mxGetNumberOfElements(prhs[1]);
+	double *sinogram = (double *)mxGetData(prhs[2]);
+  double *x = (double *)mxGetData(prhs[3]);
+	int numX = (int) mxGetNumberOfElements(prhs[3]);
+	float minX = (float) x[0];
+	float maxX = (float) x[numX-1];
 	float dx = (maxX - minX) / ((float)(numX - 1));
+	double *y = (double *)mxGetData(prhs[4]);
+	int numY = (int) mxGetNumberOfElements(prhs[4]);
+	float minY = (float) y[0];
+	float maxY = (float) y[numY-1];
 	float dy = (maxY - minY) / ((float)(numY - 1));
 
 	// Read data from files to host arrays
@@ -88,57 +111,40 @@ int main(int argc, char *argv[])
 	float *h_theta, *sg_rf;
 	h_theta = (float*)malloc(numAngles*sizeof(float));
 	sg_rf = (float*)malloc(numAngles*numSensors*sizeof(float));
-	FILE *in_sg = fopen(argv[6], "r");
-	FILE *in_theta = fopen(argv[2], "r");
-	if (in_sg == NULL)
-	{
-		fprintf(stderr, "Input file for sinogram has some issues. Please check."); exit(1);
-	}
-	if (in_theta == NULL)
-	{
-		fprintf(stderr, "Input file for angle info has some issues. Please check."); exit(1);
-	}
-	float datfromfile;
 	for (int jj = 0; jj < numAngles; jj++) {
 		for (int ii = 0; ii < numSensors; ii++) {
-			fscanf(in_sg, "%f", &datfromfile);
-			sg[ii + numSensors*jj].x = datfromfile;
+			sg[ii + numSensors*jj].x = (float)sinogram[ii + numSensors*jj];
 			sg[ii + numSensors*jj].y = 0;
 		}
 	}
 	for (int kk = 0; kk < numAngles; kk++) {
-		fscanf(in_theta, "%f", &datfromfile);
-		h_theta[kk] = datfromfile;
+		h_theta[kk] = (float)theta_degrees[kk];
 	}
 	float *d_theta, *d_sg_rf;
-	cudaMalloc(&d_theta, numAngles * sizeof(float));
-	cudaMalloc(&d_sg_rf, numAngles * numSensors * sizeof(float));
-	cudaMemcpy(d_theta, h_theta, numAngles * sizeof(float), cudaMemcpyHostToDevice);
+	CCE(cudaMalloc(&d_theta, numAngles * sizeof(float)));
+	CCE(cudaMalloc(&d_sg_rf, numAngles * numSensors * sizeof(float)));
+	CCE(cudaMemcpy(d_theta, h_theta, numAngles * sizeof(float), cudaMemcpyHostToDevice));
 
 	// Ramp filter the sinogram before binding it to a texture
 	// Setup device input data for FFT
 	cufftComplex* dData;
-	cudaMalloc((void **)&dData, sizeof(cufftComplex) * numAngles * numSensors);
-	if (cudaGetLastError() != cudaSuccess)
-	{
-		fprintf(stderr, "Cuda error: Failed to allocate\n"); return -1;
+	CCE(cudaMalloc((void **)&dData, sizeof(cufftComplex) * numAngles * numSensors));
+	if (cudaGetLastError() != cudaSuccess) {
+		fprintf(stderr, "Cuda error: Failed to allocate\n");
 	}
 	// Copy Host Array to Device Array
-	cudaMemcpy(dData, sg, sizeof(cufftComplex)* numAngles * numSensors, cudaMemcpyHostToDevice);
+	CCE(cudaMemcpy(dData, sg, sizeof(cufftComplex)* numAngles * numSensors, cudaMemcpyHostToDevice));
 	// Make FFT Plan
 	cufftHandle plan;
-	if (cufftPlan1d(&plan, numSensors, CUFFT_C2C, numAngles) != CUFFT_SUCCESS)
-	{
-		fprintf(stderr, "CUFFT error: Plan creation failed"); return -1;
+	if (cufftPlan1d(&plan, numSensors, CUFFT_C2C, numAngles) != CUFFT_SUCCESS) {
+		fprintf(stderr, "CUFFT error: Plan creation failed");
 	}
 	// Execute FFT
-	if (cufftExecC2C(plan, dData, dData, CUFFT_FORWARD) != CUFFT_SUCCESS)
-	{
-		fprintf(stderr, "CUFFT error: ExecC2C Forward failed"); return -1;
+	if (cufftExecC2C(plan, dData, dData, CUFFT_FORWARD) != CUFFT_SUCCESS) {
+		fprintf(stderr, "CUFFT error: ExecC2C Forward failed");
 	}
-	if (cudaThreadSynchronize() != cudaSuccess)
-	{
-		fprintf(stderr, "Cuda error: Failed to synchronize\n"); return -1;
+	if (cudaThreadSynchronize() != cudaSuccess) {
+		fprintf(stderr, "Cuda error: Failed to synchronize\n");
 	}
 	// Now Ramp Filter the FFT
 	dim3 dimBlockRF(16, 16, 1);
@@ -148,17 +154,17 @@ int main(int argc, char *argv[])
 	// Do Inverse FFT
 	if (cufftExecC2C(plan, dData, dData, CUFFT_INVERSE) != CUFFT_SUCCESS)
 	{
-		fprintf(stderr, "CUFFT error: ExecC2C Forward failed"); return -1;
+		fprintf(stderr, "CUFFT error: ExecC2C Forward failed");
 	}
 	if (cudaThreadSynchronize() != cudaSuccess)
 	{
-		fprintf(stderr, "Cuda error: Failed to synchronize\n"); return -1;
+		fprintf(stderr, "Cuda error: Failed to synchronize\n");
 	}
 	// Write the real part of output as the ramp filtered sinogram
 	int thdsPerBlk = 256;
 	int blksPerGrid = (numSensors*numAngles + thdsPerBlk - 1) / thdsPerBlk;
 	getRealPart << <blksPerGrid, thdsPerBlk >> >(d_sg_rf, dData, numSensors*numAngles);
-	cudaMemcpy(sg_rf, d_sg_rf, sizeof(float)*numSensors*numAngles, cudaMemcpyDeviceToHost);
+	CCE(cudaMemcpy(sg_rf, d_sg_rf, sizeof(float)*numSensors*numAngles, cudaMemcpyDeviceToHost));
 
 	// Set Up Texture for the Sinogram in Three Steps: 1), 2), and 3)
 	// 1) Allocate CUDA array in device memory
@@ -169,19 +175,19 @@ int main(int argc, char *argv[])
 	mParams.kind = cudaMemcpyHostToDevice;
 	mParams.extent = make_cudaExtent(numSensors, 1, numAngles);  // <<-- non zero height required for memcpy to do anything
 	cudaArray* cuArray;
-	cudaMalloc3DArray(&cuArray, &channelDesc, extentDesc, cudaArrayLayered);
+	CCE(cudaMalloc3DArray(&cuArray, &channelDesc, extentDesc, cudaArrayLayered));
 	mParams.dstArray = cuArray;
-	cudaMemcpy3D(&mParams);
+	CCE(cudaMemcpy3D(&mParams));
 	// 2) Set texture reference parameters
 	texSinogram.addressMode[0] = cudaAddressModeBorder;
 	texSinogram.filterMode = cudaFilterModeLinear;
 	texSinogram.normalized = false;
 	// 3) Bind the array to the texture reference
-	cudaBindTextureToArray(texSinogram, cuArray, channelDesc);
+	CCE(cudaBindTextureToArray(texSinogram, cuArray, channelDesc));
 
 	// Allocate result of backprojection in device memory
 	float *d_output;
-	cudaMalloc(&d_output, numX * numY * sizeof(float));
+	CCE(cudaMalloc(&d_output, numX * numY * sizeof(float)));
 	float *h_output;
 	h_output = (float*)malloc(numX*numY*sizeof(float));
 
@@ -191,19 +197,16 @@ int main(int argc, char *argv[])
 		(numY + dimBlockBP.y - 1) / dimBlockBP.y, 1);
 	backprojKernel << <dimGridBP, dimBlockBP >> >(numAngles, d_theta, minX, dx, numX, minY, dy, numY, minR, dr, d_output);
 
-	// Now write the output to a text file
-	cudaMemcpy(h_output, d_output, numX * numY * sizeof(float), cudaMemcpyDeviceToHost);
-	FILE *out = fopen(argv[13], "w");
-	if (out == NULL) { printf("Error opening file!\n"); exit(1); }
+	// Now write the output to a MATLAB array
+	CCE(cudaMemcpy(h_output, d_output, numX * numY * sizeof(float), cudaMemcpyDeviceToHost));
+	plhs[0] = mxCreateDoubleMatrix(numX, numY, mxREAL);
+	double *recon_out = (double *)mxGetPr(plhs[0]);
 	for (int y_idx = 0; y_idx < numY; y_idx++) {
 		for (int x_idx = 0; x_idx < numX; x_idx++) {
-			fprintf(out, "%f\n", h_output[x_idx + numX * y_idx]);
+			recon_out[x_idx + numX * y_idx] = (float) h_output[x_idx + numX * y_idx];
 		}
 	}
 
-	// Free device memory
-	cudaFreeArray(cuArray);
-	cudaFree(d_output);
-
-	return 0;
+	// Destroy all allocations and reset all state on the current device in the current process.
+	CCE(cudaDeviceReset());
 }

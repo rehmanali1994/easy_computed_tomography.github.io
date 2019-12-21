@@ -13,10 +13,14 @@ function recon_img = backproj(r_sensor, theta, sg, x, y, animation)
 [X, Y] = meshgrid(x,y);
 recon_img = zeros(size(X));
 
+% Angular Increments
+dtheta = deg2rad(mean(diff(theta)));
+
+% Backprojection Reconstruction
 if animation
     figure; M = moviein(numel(theta)); 
     for theta_idx = 1:numel(theta)
-        recon_img = recon_img + interp1(r_sensor, sg(theta_idx,:), ...
+        recon_img = recon_img + dtheta*interp1(r_sensor, sg(theta_idx,:), ...
             X*cosd(theta(theta_idx))+Y*sind(theta(theta_idx)), 'linear', 0);
         imagesc(x,y,recon_img); axis xy equal tight; colormap gray;
         xlabel('X coordinate'); ylabel('Y coordinate'); 
@@ -26,7 +30,7 @@ if animation
     end
 else
     for theta_idx = 1:numel(theta)
-        recon_img = recon_img + interp1(r_sensor, sg(theta_idx,:), ...
+        recon_img = recon_img + dtheta*interp1(r_sensor, sg(theta_idx,:), ...
             X*cosd(theta(theta_idx))+Y*sind(theta(theta_idx)), 'linear', 0);
     end
 end
